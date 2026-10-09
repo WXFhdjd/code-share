@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>代码分享库</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; background-color: #f5f5f5; padding: 20px; color: #333; }
+        .container { max-width: 700px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        h1 { text-align: center; color: #07c160; margin-bottom: 20px; font-size: 24px; }
+        
+        /* 用户信息区 */
+        .user-info { display: flex; align-items: center; gap: 15px; margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid #eee; }
+        .avatar-preview { width: 60px; height: 60px; border-radius: 50%; background-color: #ddd; overflow: hidden; cursor: pointer; border: 2px solid #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .avatar-preview img { width: 100%; height: 100%; object-fit: cover; }
+        .user-inputs { flex: 1; display: flex; gap: 10px; }
+        .user-inputs input { flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px; }
+
+        /* 表单区 */
+        .input-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; color: #555; font-weight: bold; font-size: 14px; }
+        input, textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px; }
+        textarea { height: 120px; font-family: 'Courier New', monospace; resize: vertical; }
+        button.submit-btn { width: 100%; padding: 12px; background-color: #07c160; color: white; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; transition: background 0.3s; }
+        button.submit-btn:hover { background-color: #06ad56; }
+
+        /* 列表区 */
+        .code-list { margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px; }
+        .code-item { background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #07c160; transition: transform 0.2s; }
+        .code-item:hover { transform: translateX(5px); }
+        .code-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+        .code-header img { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; }
+        .code-header span { font-weight: bold; color: #333; font-size: 14px; }
+        .code-item h3 { margin-bottom: 8px; color: #333; font-size: 16px; }
+        .code-item pre { background: #2d2d2d; color: #f8f8f2; padding: 12px; border-radius: 5px; overflow-x: auto; font-size: 13px; line-height: 1.5; margin-bottom: 10px; }
+        
+        /* 底部操作栏 */
+        .code-footer { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #999; }
+        .like-btn { background: none; border: 1px solid #ddd; border-radius: 15px; padding: 4px 12px; font-size: 13px; cursor: pointer; color: #666; transition: all 0.3s; display: flex; align-items: center; gap: 5px; }
+        .like-btn:hover { border-color: #ff4d4f; color: #ff4d4f; }
+        .like-btn.liked { background-color: #ff4d4f; color: white; border-color: #ff4d4f; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>💻 代码分享库</h1>
+        
+        <!-- 1. 用户信息设置 -->
+        <div class="user-info">
+            <div class="avatar-preview" id="avatarContainer" onclick="document.getElementById('avatarInput').click()">
+                <img id="avatarImg" src="" alt="头像" style="display:none;">
+            </div>
+            <input type="file" id="avatarInput" accept="image/*" style="display: none;">
+            <div class="user-inputs">
+                <input type="text" id="nickname" placeholder="输入你的昵称">
+            </div>
+        </div>
+
+        <!-- 2. 代码分享表单 -->
+        <div class="input-group">
+            <label for="codeTitle">代码标题：</label>
+            <input type="text" id="codeTitle" placeholder="例如：Python冒泡排序">
+        </div>
+        <div class="input-group">
+            <label for="codeContent">代码内容：</label>
+            <textarea id="codeContent" placeholder="在这里粘贴你的代码..."></textarea>
+        </div>
+        <button class="submit-btn" onclick="saveCode()">保存并分享</button>
+
+        <!-- 3. 代码列表展示 -->
+        <div class="code-list" id="codeList"></div>
+    </div>
+
+    <script>
+        // 初始化当前用户的唯一ID（如果本地没有就生成一个）
+        if (!localStorage.getItem('currentUserId')) {
+            localStorage.setItem('currentUserId', 'user_' + Math.random().toString(36).substr(2, 9));
+        }
+        const currentUserId = localStorage.getItem('currentUserId');
+
+        // 页面加载时恢复用户信息和代码列表
+        window.onload = function() {
+            const savedNickname = localStorage.getItem('nickname');
+            const savedAvatar = localStorage.getItem('avatar');
+            if (savedNickname) document.getElementById('nickname').value = savedNickname;
+            if (savedAvatar) {
+                document.getElementById('avatarImg').src = savedAvatar;
+                document.getElementById('avatarImg').style.display = 'block';
+            }
+            renderCodes();
+        };
+
+        // 头像上传与预览逻辑
+        document.getElementById('avatarInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const base64 = event.target.result;
+                    document.getElementById('avatarImg').src = base64;
+                    document.getElementById('avatarImg').style.display = 'block';
+                    localStorage.setItem('avatar', base64); // 保存头像到本地
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // 保存代码逻辑
+        function saveCode() {
+            const title = document.getElementById('codeTitle').value.trim();
+            const content = document.getElementById('codeContent').value.trim();
+            const nickname = document.getElementById('nickname').value.trim() || '匿名同学';
+            
+            // 保存昵称
+            localStorage.setItem('nickname', nickname);
+
+            if (!title || !content) {
+                alert('标题和代码内容都不能为空哦！');
+                return;
+            }
+
+            let codes = JSON.parse(localStorage.getItem('myCodes')) || [];
+            codes.unshift({
+                id: Date.now().toString(),
+                title: title,
+                content: content,
+                nickname: nickname,
+                avatar: localStorage.getItem('avatar') || '',
+                time: new Date().toLocaleString(),
+                likes: 0,
+                likedBy: [] // 记录点赞过的人的ID
+            });
+
+            localStorage.setItem('myCodes', JSON.stringify(codes));
+            document.getElementById('codeTitle').value = '';
+            document.getElementById('codeContent').value = '';
+            renderCodes();
+            alert('分享成功！');
+        }
+
+        // 渲染代码列表
+        function renderCodes() {
+            const codes = JSON.parse(localStorage.getItem('myCodes')) || [];
+            const listHtml = codes.map((item, index) => {
+                // 判断当前用户是否已经点赞过
+                const isLiked = item.likedBy && item.likedBy.includes(currentUserId);
+                return `
+                <div class="code-item">
+                    <div class="code-header">
+                        <img src="${item.avatar || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI2NjYyI+PHBhdGggZD0iTTEyIDEyYzIuMjEgMCA0LTEuNzkgNC00cy0xLjc5LTQtNC00LTQgMS43OS00IDQgMS43OSA0IDQgNHptMCAyYy0yLjY3IDAtOCAxLjM0LTggNHYyaDE2di0yYzAtMi42Ni01LjMzLTQtOC00eiIvPjwvc3ZnPg=='}" alt="头像">
+                        <span>${item.nickname}</span>
+                    </div>
+                    <h3>${item.title}</h3>
+                    <pre>${item.content}</pre>
+                    <div class="code-footer">
+                        <button class="like-btn ${isLiked ? 'liked' : ''}" onclick="toggleLike('${item.id}')">
+                            ${isLiked ? '❤️' : '🤍'} <span>${item.likes || 0}</span>
+                        </button>
+                        <span>分享于：${item.time}</span>
+                    </div>
+                </div>
+            `}).join('');
+            
+            document.getElementById('codeList').innerHTML = listHtml || '<p style="text-align:center;color:#999;padding:20px;">还没有人分享代码，快来做第一个吧！</p>';
+        }
+
+        // 切换点赞状态（核心防重复逻辑）
+        function toggleLike(codeId) {
+            let codes = JSON.parse(localStorage.getItem('myCodes')) || [];
+            const codeIndex = codes.findIndex(c => c.id === codeId);
+            
+            if (codeIndex === -1) return;
+            
+            const code = codes[codeIndex];
+            if (!code.likedBy) code.likedBy = [];
+
+            if (code.likedBy.includes(currentUserId)) {
+                // 取消点赞
+                code.likes--;
+                code.likedBy = code.likedBy.filter(id => id !== currentUserId);
+            } else {
+                // 点赞
+                code.likes++;
+                code.likedBy.push(currentUserId);
+            }
+
+            localStorage.setItem('myCodes', JSON.stringify(codes));
+            renderCodes();
+        }
+    </script>
+</body>
+</html>
